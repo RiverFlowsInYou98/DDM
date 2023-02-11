@@ -76,6 +76,7 @@ class DDModel(object):
     
 if __name__ == '__main__':
     ddm = DDModel(mu=0.2, sigma=1)
-    data = ddm.gen_data(a=4.0, z=1.5)
-    jnp.save('data', data)
+    seed = 42
+    data = ddm.gen_data(a=4.0, z=1.5, key=random.PRNGKey(seed))
+    jnp.save('data_seed' + str(seed), data)
     print('data saved!')
