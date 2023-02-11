@@ -6,11 +6,11 @@
 #SBATCH --mem=16G
 #SBATCH -p batch
 #SBATCH -t 4-00:00:00
-#SBATCH -o backup/results/output-%A-%a.out
+#SBATCH -o Results/output-%A-%a.out
 
 module load anaconda/2022.05
 source /gpfs/runtime/opt/anaconda/2020.02/etc/profile.d/conda.sh
-conda activate torch
+conda activate ddm
 
-cd backup
-python3 -u ml_search.py 
+cd Backup
+python3 -u search.py 
