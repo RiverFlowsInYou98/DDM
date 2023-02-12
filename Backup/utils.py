@@ -27,9 +27,10 @@ def logdotexp(A, B):
     B_ = np.stack([B] * A.shape[0]).transpose(0, 2, 1)
     return logsumexp(A_ + B_, axis=2)
 
-def LogLikelihood(chain, data):
+def loss_fun(chain, data):
     """
-    compute the likelihood: product of P(X(Tk)=Ck)
+    compute the negative log likelihood
+    likelihood = product of P(X(Tk)=Ck)
     """
     logprob = 0 
     for Tk, Ck in data:
