@@ -29,6 +29,7 @@ for mu in mu_list:
 
 
 np.savetxt('../Results/probs-' + JOB_TASK_ID + '.txt', np.array(probs_list))
+print("results saved!")
 print("argmin: %.2f" %mu_list[np.argmin(probs_list)])
 # plt.plot(mu_list, probs_list)
 # plt.savefig('probs1d.png', bbox_inches='tight')
