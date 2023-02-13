@@ -13,4 +13,4 @@ source /gpfs/runtime/opt/anaconda/2020.02/etc/profile.d/conda.sh
 conda activate ddm
 
 cd Backup
-python3 -u search.py 
+python3 -u search2.py 
