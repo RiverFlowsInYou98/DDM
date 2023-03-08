@@ -15,7 +15,7 @@ with open('../Data/' + filename, "rb") as fp:
     pkl = pickle.load(fp)
     
 data, intervals = pkl[0], pkl[1]
-start_idx, end_idx = 0, 200
+start_idx, end_idx = 0, 1000
 data = data[start_idx: end_idx]
 intervals = intervals[start_idx: end_idx]
 print('%s %d: %d' %(filename, start_idx, end_idx))
