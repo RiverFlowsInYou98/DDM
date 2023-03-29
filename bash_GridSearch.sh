@@ -12,5 +12,5 @@ module load anaconda/2022.05
 source /gpfs/runtime/opt/anaconda/2020.02/etc/profile.d/conda.sh
 conda activate ddm
 
-cd Backup
-python3 -u search2.py 
+cd Codes/test
+python3 -u mle_search.py 
