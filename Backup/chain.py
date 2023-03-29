@@ -15,7 +15,7 @@ class approx_hmc(nx.DiGraph):
         self.mu = mu  # drift coeff (constant)
         self.sigma = sigma  # diffusion coeff (constant)
         self.a = a  # upper boundary
-        self.z = z  # starting point
+        self.z = z * a  # starting point
         self.Nx = Nx  # num of space steps
 
         self.dt = dt
