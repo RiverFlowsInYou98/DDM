@@ -56,7 +56,7 @@ class MC_DDM(nx.DiGraph):
             nz_dict[(i, i + 1)] = self.p1
         dict.update(AdjMat, nz_dict)
         self.AdjMat = sp.csr_matrix(AdjMat)
-        super(approx_hmc, self).__init__(self.AdjMat)
+        super(MC_DDM, self).__init__(self.AdjMat)
 
     def ExitDist(self, T):
         """
