@@ -66,14 +66,17 @@ def wfpt(T, mu, a, z, err):
     return p
 
 
-def mu_pc(t, u1, u2, endpoints):
+def mu_pc(t, u1, u2, endpoints, flag):
     jumps = endpoints[1:-1]
-    return (-1) ** np.searchsorted(jumps, t) * (u1 - u2) / 2 + (u2 + u1) / 2
+    return (-1) ** (np.searchsorted(jumps, t) + flag) * (u1 - u2) / 2 + (u2 + u1) / 2
 
 
-def mut_pl(t, u1, u2, endpoints):
+def mut_pl(t, u1, u2, endpoints, flag):
     jumps = endpoints[1:-1]
     isi = np.diff(endpoints)
     idx = np.searchsorted(jumps, t)
     isi_t = np.hstack((isi[:idx], t - jumps[idx - 1])) if idx > 0 else t
-    return np.sum(isi_t * np.resize([u1, u2], idx + 1))
+    if flag == 0:
+        return np.sum(isi_t * np.resize([u1, u2], idx + 1))
+    else:
+        return np.sum(isi_t * np.resize([u2, u1], idx + 1))
