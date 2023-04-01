@@ -201,7 +201,7 @@ class ihmc(object):
         t - time
         endpoints: the jumping times of the current sample path
         """
-        mu_t = lambda t: mu_pc(t, self.mu1, self.mu2, endpoints)
+        mu_t = lambda t: mu_pc(t, self.mu1, self.mu2, endpoints, flag=0)
         mu = mu_t(t)
         m1 = mu * self.dt
         m2 = (mu * self.dt) ** 2 + self.sigma ** 2 * self.dt
@@ -399,6 +399,164 @@ class MC_Angle(object):
         scaled_table[:, [idx_T - 1]] = self.AdjMat[:, [idx_s]].toarray() / np.exp(r)
         for t_step in range(idx_T - 2, -1, -1):
             self.Update_AdjMat(t_step * self.dt)
+            b = np.sum(self.AdjMat @ scaled_table[:, [t_step + 1]])
+            r = r + np.log(b)
+            scaled_table[:, [t_step]] = self.AdjMat @ scaled_table[:, [t_step + 1]] / b
+        return scaled_table[:, 0] * np.exp(r) @ self.init_dist
+
+
+class MC_PDDM(object):
+    """
+    Markov chain approximation of two Brownian motions with drift,
+    whose drift are mu1 and mu2 respectively
+    At each step, the process has a small probability of jumping from one to the other.
+    """
+
+    def __init__(self, mu1, mu2, sigma, lbda, a, z, t_nd, dt, Nx) -> None:
+        self.mu1 = mu1
+        self.mu2 = mu2
+        self.sigma = sigma
+        self.lbda = lbda
+        self.a = a  # boundaries start at 'a' and '-a'
+        self.z = -a + z * (2 * a)  # starting point
+        self.t_nd = t_nd  # non-decision time
+
+        # space and time discretization
+        self.dt = dt
+        self.Nx = Nx  # num of space steps
+        dx = (2 * a) / Nx
+        self.dx = dx
+        # starting point and initial distribution
+        self.idx_z = self.pos2idx(self.z)  # index of starting point
+        self.init_dist = np.zeros(2 * self.Nx + 3)
+        self.init_dist[self.idx_z] = 0.5
+        self.init_dist[self.idx_z + self.Nx + 1] = 0.5
+
+        # transitional probabilities
+        m11 = mu1 * self.dt
+        m21 = (mu1 * self.dt) ** 2 + self.sigma ** 2 * self.dt
+        self.p11 = (m21 / self.dx ** 2 + m11 / self.dx) / 2
+        self.p21 = (m21 / self.dx ** 2 - m11 / self.dx) / 2
+        assert self.p11 + self.p21 < 1, "p+=%.5f, p0=%.5f, p-=%.5f" % (
+            self.p11,
+            1 - self.p11 - self.p21,
+            self.p21,
+        )
+        m12 = mu2 * self.dt
+        m22 = (mu2 * self.dt) ** 2 + self.sigma ** 2 * self.dt
+        self.p12 = (m22 / self.dx ** 2 + m12 / self.dx) / 2
+        self.p22 = (m22 / self.dx ** 2 - m12 / self.dx) / 2
+        assert self.p12 + self.p22 < 1, "p+=%.5f, p0=%.5f, p-=%.5f" % (
+            self.p12,
+            1 - self.p12 - self.p22,
+            self.p22,
+        )
+        self.Construct_AdjMat()
+
+    def pos2idx(self, x):
+        """
+        find the nearest spatial grid point of 'x'
+        return the index
+        """
+        return int(round((x + self.a) / self.dx))
+
+    def Construct_AdjMat(self):
+        """
+        transition probability matrix
+        0, 1, ..., Nx are transient states of BM1
+        Nx+1, Nx+2, ..., 2Nx+1 are transient states of BM2
+        2Nx+2 is the absorbing state
+        arguments:
+        t - time
+        """
+        MCTransProb = sp.dok_matrix((2 * self.Nx + 3, 2 * self.Nx + 3))
+        nz_dict = {
+            (0, 2 * self.Nx + 2): 1,
+            (self.Nx, 2 * self.Nx + 2): 1,
+            (self.Nx + 1, 2 * self.Nx + 2): 1,
+            (2 * self.Nx + 1, 2 * self.Nx + 2): 1,
+            (2 * self.Nx + 2, 2 * self.Nx + 2): 1,
+        }
+        for i in range(1, self.Nx):
+            nz_dict[(i, i - 1)] = self.p21
+            nz_dict[(i, i)] = 1 - self.p11 - self.p21
+            nz_dict[(i, i + 1)] = self.p11
+        for i in range(self.Nx + 2, 2 * self.Nx + 1):
+            nz_dict[(i, i - 1)] = self.p22
+            nz_dict[(i, i)] = 1 - self.p12 - self.p22
+            nz_dict[(i, i + 1)] = self.p12
+        dict.update(MCTransProb, nz_dict)
+        # with np.printoptions(precision=3, suppress=True):
+        #     print(MCTransProb.toarray())
+
+        PoissonTransProb = sp.dok_matrix((2 * self.Nx + 3, 2 * self.Nx + 3))
+        nz_dict = {(2 * self.Nx + 2, 2 * self.Nx + 2): 1}
+        for i in range(0, 2 * self.Nx + 2):
+            nz_dict[(i, i)] = 1 - np.exp(-self.lbda * self.dt) * np.sinh(
+                self.lbda * self.dt
+            )
+            nz_dict[(i, (i + self.Nx + 1) % (2 * self.Nx + 2))] = np.exp(
+                -self.lbda * self.dt
+            ) * np.sinh(self.lbda * self.dt)
+        dict.update(PoissonTransProb, nz_dict)
+        # with np.printoptions(precision=3, suppress=True):
+        #     print(PoissonTransProb.toarray())
+        
+        self.AdjMat = sp.csr_matrix(np.dot(PoissonTransProb, MCTransProb))
+
+    def ExitDist(self, T):
+        """
+        compute the full distribution of X[T]
+        where T is the first passage time
+        by MATRIX MULTIPLICATION
+        """
+        T = T - self.t_nd
+        dist_Xt = self.init_dist
+        idx_T = int(round(T / self.dt))
+        for t_step in range(idx_T):
+            dist_Xt = dist_Xt @ self.AdjMat
+        return dist_Xt
+    
+    def TotalExitProb(self, T, s):
+        """
+        return the exit probability of the original process
+        """
+        return self.ExitProb_dp(T, s) + self.ExitProb_dp(T, s, reflected=True) 
+
+    def ExitProb_dp(self, T, s, reflected=False):
+        """
+        compute the probability of P(X[T]=s)
+        where t is the first passage time
+        by DYNAMIC PROGRAMMING based on SPARSE ADJACENCY MATRIX
+        s: value in [-a, a]
+        """
+        T = T - self.t_nd
+        idx_T = int(round(T / self.dt))
+        idx_s = self.pos2idx(s)
+        if reflected:
+            idx_s += self.Nx + 1
+        table = np.zeros((2 * self.Nx + 3, idx_T))
+        table[:, [idx_T - 1]] = self.AdjMat[:, [idx_s]].toarray()
+        for t_step in range(idx_T - 2, -1, -1):
+            table[:, [t_step]] = self.AdjMat @ table[:, [t_step + 1]]
+        return table[:, 0] @ self.init_dist
+
+    def ExitProb_logdp(self, T, s, reflected=False):
+        """
+        compute the probability of P(X[T]=s) with a EXP scaling
+        where t is the first passage time
+        by DYNAMIC PROGRAMMING based on ADJACENCY MATRIX
+        s: value in [-a, a]
+        """
+        T = T - self.t_nd
+        idx_T = int(round(T / self.dt))
+        idx_s = self.pos2idx(s)
+        if reflected:
+            idx_s += self.Nx + 1
+        scaled_table = np.zeros((2 * self.Nx + 3, idx_T))
+        r = 0
+        scaled_table[:, [idx_T - 1]] = self.AdjMat[:, [idx_s]].toarray() / np.exp(r)
+        for t_step in range(idx_T - 2, -1, -1):
             b = np.sum(self.AdjMat @ scaled_table[:, [t_step + 1]])
             r = r + np.log(b)
             scaled_table[:, [t_step]] = self.AdjMat @ scaled_table[:, [t_step + 1]] / b
