@@ -13,4 +13,4 @@ source /gpfs/runtime/opt/anaconda/2020.02/etc/profile.d/conda.sh
 conda activate ddm
 
 cd Codes/test
-python3 -u mle_search.py 
+python3 -u mle_search3.py 
