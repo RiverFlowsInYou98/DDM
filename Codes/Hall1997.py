@@ -6,6 +6,10 @@ def normpdf(x):
 
 
 def density_horiz(t, mu, a, b, trunc_num=100, bdy="upper"):
+    """
+    First passage time density on the horizental boundaries
+    TBD: logsumexp trick?
+    """
     if bdy == "upper":
         tau = mu + b
     elif bdy == "lower":
@@ -25,156 +29,59 @@ def density_horiz(t, mu, a, b, trunc_num=100, bdy="upper"):
             * a
             * np.exp(0.5 * (a * b - a**2 / t) * (2 * j + 1) ** 2)
         )
+        if np.max(np.abs(term)) < 1e-20:
+            break
         result += term
-        # print("{:>.8e}".format(term* factor), end="\t")
-        # print("{:>.8e}".format(result* factor))
+        # print("{:>.8e}".format(term * factor), end="\t")
+        # print("{:>.8e}".format(result * factor))
     return result * factor
 
 
-def density_horiz_debug(t, mu, a, theta, trunc_num=100, bdy="upper", debug=False):
-    c = 2 * a
-    b = theta
-    if bdy == "upper":
-        tau = mu + theta
-    elif bdy == "lower":
-        tau = -mu + theta
-    else:
-        raise ValueError
-    result = 0
-    # if debug:
-    #     print("even_term\t   odd_term\t\tterm\t\tresult")
-    for k in range(trunc_num):
-        r_even = 2 * k * c + a
-        r_odd = (2 * k + 1) * c + a
-        even_term = (
-            np.exp(b / c * (r_even**2 - a**2))
-            * r_even
-            * normpdf(r_even / np.sqrt(t))
-        )
-        odd_term = (
-            -np.exp(b / c * (r_odd**2 - a**2)) * r_odd * normpdf(r_odd / np.sqrt(t))
-        )
-        term = even_term + odd_term
-        # if debug:
-        #     print(
-        #         "{:>.8e}".format(
-        #             t ** (-1.5) * np.exp(a * tau - 0.5 * tau**2 * t) * even_term
-        #         ),
-        #         end="\t",
-        #     )
-        #     print(
-        #         "{:>.8e}".format(
-        #             t ** (-1.5) * np.exp(a * tau - 0.5 * tau**2 * t) * odd_term
-        #         ),
-        #         end="\t",
-        #     )
-        #     print(
-        #         "{:>.8e}".format(
-        #             t ** (-1.5) * np.exp(a * tau - 0.5 * tau**2 * t) * term
-        #         ),
-        #         end="\t",
-        #     )
-        result += t ** (-1.5) * np.exp(a * tau - 0.5 * tau**2 * t) * term
-        # if debug:
-        #     print("{:>.8e}".format(result))
-    return result
-
-
-def density_vertical(x, mu, a, theta, t0, trunc_num=100, debug=False):
-    c = 2 * a
-    b = theta
+def density_vertical(x, mu, a, b, t0, trunc_num=100, debug=False):
     factor = np.exp(mu * x - 0.5 * mu**2 * t0) / np.sqrt(t0)
-    result = normpdf(x / np.sqrt(t0)) * factor
-    for j in range(trunc_num):
-        term1 = np.exp(4 * b * j**2 * c) * normpdf((x - 2 * j * c) / np.sqrt(t0))
-        term2 = np.exp(4 * b * j**2 * c) * normpdf((x + 2 * j * c) / np.sqrt(t0))
-        term3 = np.exp(2 * b * (2 * j - 1) * (j * c - a)) * normpdf(
-            (x + 2 * j * c - 2 * a) / np.sqrt(t0)
+    result = normpdf(x / np.sqrt(t0))
+    for j in range(1, trunc_num):
+        t1 = 4 * a * x / t0 * j - x**2 / (2 * t0)
+        t2 = -4 * a * x / t0 * j - x**2 / (2 * t0)
+        t3 = (
+            (-8 * a * b - 4 * a / t0 * (x - 2 * a)) * j
+            + 2 * a * b
+            - (x - 2 * a) ** 2 / (2 * t0)
         )
-        term4 = np.exp(2 * b * (2 * j - 1) * (j * c - a)) * normpdf(
-            (x - 2 * j * c + 2 * a) / np.sqrt(t0)
+        t4 = (
+            (-8 * a * b + 4 * a / t0 * (x + 2 * a)) * j
+            + 2 * a * b
+            - (x + 2 * a) ** 2 / (2 * t0)
         )
-        term = term1 + term2 - term3 - term4
-        result += term * factor
-        if debug:
-            print(term * factor)
-    return result
+        factor2 = np.exp((8 * a * b - 8 * a**2 / t0) * j**2) / np.sqrt(2 * np.pi)
+        term =  (np.exp(t1) + np.exp(t2) - np.exp(t3) - np.exp(t4)) * factor2
+        if np.max(np.abs(term)) < 1e-20:
+            break
+        # print("{:>.8e}".format(np.exp(t1) * factor2), end="\t")
+        # print("{:>.8e}".format(np.exp(t2) * factor2), end="\t")
+        # print("{:>.8e}".format(-np.exp(t3) * factor2), end="\t")
+        # print("{:>.8e}".format(-np.exp(t4) * factor2), end="\t")
+        # print("{:>.8e}".format(term))
+        result += term
+    return result * factor
 
 
-def density_horiz2(t, mu, a, theta, trunc_num=100, bdy="upper", debug=False):
-    c = 2 * a
-    b = theta
-    if bdy == "upper":
-        tau = mu + theta
-    elif bdy == "lower":
-        tau = -mu + theta
-    else:
-        raise ValueError
-    result = 0
-    factor = (
-        t ** (-1.5)
-        * np.exp(a * tau - 0.5 * tau**2 * t - b / c * a**2)
-        / np.sqrt(2 * np.pi)
-    )
-    # if debug:
-    #     print("even_term\t   odd_term\t\tterm\t\tresult")
-    for k in range(trunc_num):
-        t1 = np.exp((b / c - 1 / (2 * t)) * (2 * k * c + a) ** 2)
-        t2 = (
-            2 * k * c
-            + a
-            - ((2 * k + 1) * c + a)
-            * np.exp((b - c / (2 * t)) * ((4 * k + 1) * c + 2 * a))
-        )
-
-        # r_even = 2 * k * c + a
-        # r_odd = (2 * k + 1) * c + a
-        # even_term = r_even * np.exp(
-        #     (b / c - 1 / (2 * t)) * r_even**2 - b / c * a**2
-        # )
-        # odd_term = -r_odd * np.exp((b / c - 1 / (2 * t)) * r_odd**2 - b / c * a**2)
-        # term = even_term + odd_term
-        # if debug:
-        #     print(
-        #         "{:>.8e}".format(
-        #             t ** (-1.5) * np.exp(a * tau - 0.5 * tau**2 * t) * even_term
-        #         ),
-        #         end="\t",
-        #     )
-        #     print(
-        #         "{:>.8e}".format(
-        #             t ** (-1.5) * np.exp(a * tau - 0.5 * tau**2 * t) * odd_term
-        #         ),
-        #         end="\t",
-        #     )
-        #     print(
-        #         "{:>.8e}".format(
-        #             t ** (-1.5) * np.exp(a * tau - 0.5 * tau**2 * t) * term
-        #         ),
-        #         end="\t",
-        #     )
-        result += t1 * t2
-        # if debug:
-        #     print("{:>.8e}".format(result))
-    return factor * result
-
-
-def density_vertical(x, mu, a, theta, t0, trunc_num=100, debug=False):
-    c = 2 * a
-    b = theta
-    factor = np.exp(mu * x - 0.5 * mu**2 * t0) / np.sqrt(t0)
-    result = normpdf(x / np.sqrt(t0)) * factor
-    for j in range(trunc_num):
-        term1 = np.exp(4 * b * j**2 * c) * normpdf((x - 2 * j * c) / np.sqrt(t0))
-        term2 = np.exp(4 * b * j**2 * c) * normpdf((x + 2 * j * c) / np.sqrt(t0))
-        term3 = np.exp(2 * b * (2 * j - 1) * (j * c - a)) * normpdf(
-            (x + 2 * j * c - 2 * a) / np.sqrt(t0)
-        )
-        term4 = np.exp(2 * b * (2 * j - 1) * (j * c - a)) * normpdf(
-            (x - 2 * j * c + 2 * a) / np.sqrt(t0)
-        )
-        term = term1 + term2 - term3 - term4
-        result += term * factor
-        if debug:
-            print(term * factor)
-    return result
+# def density_vertical2(x, mu, a, theta, t0, trunc_num=100, debug=False):
+#     c = 2 * a
+#     b = theta
+#     factor = np.exp(mu * x - 0.5 * mu**2 * t0) / np.sqrt(t0)
+#     result = normpdf(x / np.sqrt(t0)) * factor
+#     for j in range(1, trunc_num):
+#         term1 = np.exp(4 * b * j**2 * c) * normpdf((x - 2 * j * c) / np.sqrt(t0))
+#         term2 = np.exp(4 * b * j**2 * c) * normpdf((x + 2 * j * c) / np.sqrt(t0))
+#         term3 = np.exp(2 * b * (2 * j - 1) * (j * c - a)) * normpdf(
+#             (x + 2 * j * c - 2 * a) / np.sqrt(t0)
+#         )
+#         term4 = np.exp(2 * b * (2 * j - 1) * (j * c - a)) * normpdf(
+#             (x - 2 * j * c + 2 * a) / np.sqrt(t0)
+#         )
+#         term = term1 + term2 - term3 - term4
+#         result += term * factor
+#         if debug:
+#             print(term * factor)
+#     return result
