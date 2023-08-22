@@ -1,87 +1,74 @@
+from numpy import exp, sqrt, pi
 import numpy as np
+from scipy.special import logsumexp
 
 
 def normpdf(x):
-    return 1 / np.sqrt(2 * np.pi) * np.exp(-(x**2) / 2)
+    return 1 / sqrt(2 * pi) * exp(-(x**2) / 2)
 
 
-def density_horiz(t, mu, a, b, trunc_num=100, bdy="upper"):
+def density_upper(t, mu, a, b, x0, trunc_num=100):
     """
-    First passage time density on the horizental boundaries
-    TBD: logsumexp trick?
+    First passage time density on the upper boundary
     """
-    if bdy == "upper":
-        tau = mu + b
-    elif bdy == "lower":
-        tau = -mu + b
-    else:
-        raise ValueError
+    tau = mu + b
+    a1 = a - x0
     factor = (
         t ** (-1.5)
-        * np.exp(a * tau - 0.5 * tau**2 * t - a * b / 2)
-        / np.sqrt(2 * np.pi)
+        * exp(a1 * tau - 0.5 * tau**2 * t - b / (2 * a) * a1**2)
+        / sqrt(2 * pi)
     )
     result = 0
     for j in range(trunc_num):
-        term = (
-            (-1) ** j
-            * (2 * j + 1)
-            * a
-            * np.exp(0.5 * (a * b - a**2 / t) * (2 * j + 1) ** 2)
-        )
+        rj = (2 * j + 1) * a - (-1) ** j * x0
+        term = (-1) ** j * rj * exp(0.5 * (b / a - 1 / t) * rj**2)
         if np.max(np.abs(term)) < 1e-20:
             break
         result += term
-        # print("{:>.8e}".format(term * factor), end="\t")
-        # print("{:>.8e}".format(result * factor))
     return result * factor
 
 
-def density_vertical(x, mu, a, b, t0, trunc_num=100, debug=False):
-    factor = np.exp(mu * x - 0.5 * mu**2 * t0) / np.sqrt(t0)
-    result = normpdf(x / np.sqrt(t0))
+def density_lower(t, mu, a, b, x0, trunc_num=100):
+    """
+    First passage time density on the lower boundary
+    """
+    tau = -mu + b
+    a1 = a + x0
+    factor = (
+        t ** (-1.5)
+        * exp(a1 * tau - 0.5 * tau**2 * t - b / (2 * a) * a1**2)
+        / sqrt(2 * pi)
+    )
+    result = 0
+    for j in range(trunc_num):
+        rj = (2 * j + 1) * a + (-1) ** j * x0
+        term = (-1) ** j * rj * exp(0.5 * (b / a - 1 / t) * rj**2)
+        if np.max(np.abs(term)) < 1e-20:
+            break
+        result += term
+    return result * factor
+
+
+def density_vertical(x, mu, a, b, x0, T, trunc_num=100, if_logsumexp=True):
+    """
+    doesn't work, haven't figured out why
+    """
+    x = x - x0
+    factor = exp(mu * x - 0.5 * mu**2 * T) / sqrt(T)
+    result = normpdf(x / sqrt(T))
     for j in range(1, trunc_num):
-        t1 = 4 * a * x / t0 * j - x**2 / (2 * t0)
-        t2 = -4 * a * x / t0 * j - x**2 / (2 * t0)
-        t3 = (
-            (-8 * a * b - 4 * a / t0 * (x - 2 * a)) * j
-            + 2 * a * b
-            - (x - 2 * a) ** 2 / (2 * t0)
-        )
-        t4 = (
-            (-8 * a * b + 4 * a / t0 * (x + 2 * a)) * j
-            + 2 * a * b
-            - (x + 2 * a) ** 2 / (2 * t0)
-        )
-        factor2 = np.exp((8 * a * b - 8 * a**2 / t0) * j**2) / np.sqrt(2 * np.pi)
-        term =  (np.exp(t1) + np.exp(t2) - np.exp(t3) - np.exp(t4)) * factor2
-        if np.max(np.abs(term)) < 1e-20:
-            break
-        # print("{:>.8e}".format(np.exp(t1) * factor2), end="\t")
-        # print("{:>.8e}".format(np.exp(t2) * factor2), end="\t")
-        # print("{:>.8e}".format(-np.exp(t3) * factor2), end="\t")
-        # print("{:>.8e}".format(-np.exp(t4) * factor2), end="\t")
-        # print("{:>.8e}".format(term))
-        result += term
+        t1 = 4 * b * j * (2 * a * j + x0) - (x - 4 * a * j) ** 2 / (2 * T)
+        t2 = 4 * b * j * (2 * a * j - x0) - (x + 4 * a * j) ** 2 / (2 * T)
+        t3 = 2 * b * (2 * j - 1) * (2 * a * j - a + x0) - (x + (4 * j - 2) * a + 2 * x0) ** 2 / (2 * T)
+        t4 = 2 * b * (2 * j - 1) * (2 * a * j - a - x0) - (x - (4 * j - 2) * a + 2 * x0) ** 2 / (2 * T)
+        if if_logsumexp:
+            logterm, sign = logsumexp([t1, t2, t3, t4], b=[1, 1, -1, -1], return_sign=True)
+            if logterm < -20:
+                break
+            result += sign * exp(logterm) / sqrt(2 * pi)
+        else:
+            term = exp(t1) + exp(t2) - exp(t3) - exp(t4)
+            if np.max(np.abs(term)) < 1e-50:
+                break
+            result += term / sqrt(2 * pi)
     return result * factor
-
-
-# def density_vertical2(x, mu, a, theta, t0, trunc_num=100, debug=False):
-#     c = 2 * a
-#     b = theta
-#     factor = np.exp(mu * x - 0.5 * mu**2 * t0) / np.sqrt(t0)
-#     result = normpdf(x / np.sqrt(t0)) * factor
-#     for j in range(1, trunc_num):
-#         term1 = np.exp(4 * b * j**2 * c) * normpdf((x - 2 * j * c) / np.sqrt(t0))
-#         term2 = np.exp(4 * b * j**2 * c) * normpdf((x + 2 * j * c) / np.sqrt(t0))
-#         term3 = np.exp(2 * b * (2 * j - 1) * (j * c - a)) * normpdf(
-#             (x + 2 * j * c - 2 * a) / np.sqrt(t0)
-#         )
-#         term4 = np.exp(2 * b * (2 * j - 1) * (j * c - a)) * normpdf(
-#             (x - 2 * j * c + 2 * a) / np.sqrt(t0)
-#         )
-#         term = term1 + term2 - term3 - term4
-#         result += term * factor
-#         if debug:
-#             print(term * factor)
-#     return result
