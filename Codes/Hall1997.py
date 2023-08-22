@@ -28,6 +28,27 @@ def density_upper(t, mu, a, b, x0, trunc_num=100):
     return result * factor
 
 
+def density_upper_logsumexp(t, mu, a, b, x0, trunc_num=100):
+    """
+    First passage time density on the upper boundary
+    """
+    tau = mu + b
+    a1 = a - x0
+    factor = (
+        t ** (-1.5)
+        * exp(a1 * tau - 0.5 * tau**2 * t - b / (2 * a) * a1**2)
+        / sqrt(2 * pi)
+    )
+    # s is just the array (-1)**j
+    s = np.empty((trunc_num,))
+    s[::2] = 1
+    s[1::2] = -1
+    r = (np.arange(1, 2 * trunc_num, 2) * a - s * x0) * s
+    logterms = 0.5 * (b / a - 1 / t) * r**2
+    logresult, sign = logsumexp(logterms, b=r, return_sign=True)
+    return sign * exp(logresult) * factor
+
+
 def density_lower(t, mu, a, b, x0, trunc_num=100):
     """
     First passage time density on the lower boundary
@@ -49,9 +70,30 @@ def density_lower(t, mu, a, b, x0, trunc_num=100):
     return result * factor
 
 
-def density_vertical(x, mu, a, b, x0, T, trunc_num=100, if_logsumexp=True):
+def density_lower_logsumexp(t, mu, a, b, x0, trunc_num=100):
     """
-    doesn't work, haven't figured out why
+    First passage time density on the lower boundary
+    """
+    tau = -mu + b
+    a1 = a + x0
+    factor = (
+        t ** (-1.5)
+        * exp(a1 * tau - 0.5 * tau**2 * t - b / (2 * a) * a1**2)
+        / sqrt(2 * pi)
+    )
+    # s is just the array (-1)**j
+    s = np.empty((trunc_num,))
+    s[::2] = 1
+    s[1::2] = -1
+    r = (np.arange(1, 2 * trunc_num, 2) * a + s * x0) * s
+    logterms = 0.5 * (b / a - 1 / t) * r**2
+    logresult, sign = logsumexp(logterms, b=r, return_sign=True)
+    return sign * exp(logresult) * factor
+
+
+def density_vertical(x, mu, a, b, x0, T, trunc_num=100):
+    """
+    exit density on the vertical boundary
     """
     x = x - x0
     factor = exp(mu * x - 0.5 * mu**2 * T) / sqrt(T)
@@ -61,14 +103,27 @@ def density_vertical(x, mu, a, b, x0, T, trunc_num=100, if_logsumexp=True):
         t2 = 4 * b * j * (2 * a * j - x0) - (x + 4 * a * j) ** 2 / (2 * T)
         t3 = 2 * b * (2 * j - 1) * (2 * a * j - a + x0) - (x + (4 * j - 2) * a + 2 * x0) ** 2 / (2 * T)
         t4 = 2 * b * (2 * j - 1) * (2 * a * j - a - x0) - (x - (4 * j - 2) * a + 2 * x0) ** 2 / (2 * T)
-        if if_logsumexp:
-            logterm, sign = logsumexp([t1, t2, t3, t4], b=[1, 1, -1, -1], return_sign=True)
-            if logterm < -20:
-                break
-            result += sign * exp(logterm) / sqrt(2 * pi)
-        else:
-            term = exp(t1) + exp(t2) - exp(t3) - exp(t4)
-            if np.max(np.abs(term)) < 1e-50:
-                break
-            result += term / sqrt(2 * pi)
+        term = exp(t1) + exp(t2) - exp(t3) - exp(t4)
+        if np.max(np.abs(term)) < 1e-20:
+            break
+        result += term / sqrt(2 * pi)
+    return result * factor
+
+
+def density_vertical_logsumexp(x, mu, a, b, x0, T, trunc_num=100):
+    """
+    exit density on the vertical boundary
+    """
+    x = x - x0
+    factor = exp(mu * x - 0.5 * mu**2 * T) / sqrt(T)
+    result = normpdf(x / sqrt(T))
+    for j in range(1, trunc_num):
+        t1 = 4 * b * j * (2 * a * j + x0) - (x - 4 * a * j) ** 2 / (2 * T)
+        t2 = 4 * b * j * (2 * a * j - x0) - (x + 4 * a * j) ** 2 / (2 * T)
+        t3 = 2 * b * (2 * j - 1) * (2 * a * j - a + x0) - (x + (4 * j - 2) * a + 2 * x0) ** 2 / (2 * T)
+        t4 = 2 * b * (2 * j - 1) * (2 * a * j - a - x0) - (x - (4 * j - 2) * a + 2 * x0) ** 2 / (2 * T)
+        logterm, sign = logsumexp([t1, t2, t3, t4], b=[1, 1, -1, -1], return_sign=True)
+        if logterm < -20:
+            break
+        result += sign * exp(logterm) / sqrt(2 * pi)
     return result * factor
