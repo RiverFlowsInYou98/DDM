@@ -129,4 +129,3 @@ def get_fptd_aAngle_seq(t, mu_list, t_list, a, theta, x0, bdy):
             result += pv_seq_list[i] * f(t, xs_old[i], t_list[d - 2], mu_list[d - 1])
         result *= xs_old[1] - xs_old[0]
         return result
-
