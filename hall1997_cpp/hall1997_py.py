@@ -59,7 +59,7 @@ if __name__ == "__main__":
     x0 = -0.1
 
     t = 1.0
-    x = 0
+    x = 0.3
     
     start1 = time.time()
     for i in range(1000):
